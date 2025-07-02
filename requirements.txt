@@ -3,3 +3,4 @@ pandas
 requests 
 streamlit-authenticator
 PyYAML 
+bs4
