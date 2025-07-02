@@ -5,7 +5,7 @@ import pandas as pd
 
 from auth      import init_auth
 from scraper   import get_basic_info      # your scraper
-from scorer    import score               # weighted scorer
+from scorer    import score, enrich_company      # weighted scorer and real enrichment
 
 # ---------- AUTH INITIALISATION ------------------------------------
 authenticator, _, _ = init_auth()
@@ -72,7 +72,7 @@ def run_app_body():
         if not set(["company", "website"]).issubset(df.columns):
             st.error("CSV must have 'company' and 'website' columns.")
         else:
-            enriched = [enrich_company(row) for _, row in df.iterrows()]
+            enriched = [enrich_company(row.to_dict()) for _, row in df.iterrows()]
             for info in enriched:
                 info["score"] = score(
                     info,
