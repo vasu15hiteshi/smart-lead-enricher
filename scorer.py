@@ -1,5 +1,6 @@
 import requests
 import os
+from scraper import get_basic_info
 
 CLEARBIT_API_KEY = os.getenv("CLEARBIT_API_KEY")  # Set in your Streamlit Cloud secrets
 HUNTER_API_KEY = os.getenv("HUNTER_API_KEY")      # Set in your Streamlit Cloud secrets
@@ -19,32 +20,49 @@ def enrich_company(row):
     }
 
     # --- Clearbit Enrichment ---
-    try:
-        resp = requests.get(
-            f"https://company.clearbit.com/v2/companies/find?domain={domain}",
-            auth=(CLEARBIT_API_KEY, '')
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            info["employees"] = data.get("metrics", {}).get("employees")
-            info["title"] = data.get("description", "")
-            info["techs"] = data.get("tech", [])
-            info["has_blog"] = bool(data.get("blog"))
-            info["has_social"] = bool(data.get("facebook") or data.get("twitter") or data.get("linkedin"))
-            info["funding"] = data.get("metrics", {}).get("raised")
-    except Exception as e:
-        pass  # Handle/log errors as needed
+    if not CLEARBIT_API_KEY:
+        print("Warning: CLEARBIT_API_KEY not set. Skipping Clearbit enrichment.")
+    else:
+        try:
+            resp = requests.get(
+                f"https://company.clearbit.com/v2/companies/find?domain={domain}",
+                auth=(CLEARBIT_API_KEY, '')
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                info["employees"] = data.get("metrics", {}).get("employees")
+                info["title"] = data.get("description", "")
+                info["techs"] = data.get("tech", [])
+                info["has_blog"] = bool(data.get("blog"))
+                info["has_social"] = bool(data.get("facebook") or data.get("twitter") or data.get("linkedin"))
+                info["funding"] = data.get("metrics", {}).get("raised")
+            else:
+                print(f"Clearbit API error: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"Clearbit enrichment error: {e}")
 
     # --- Hunter.io Email Finder ---
+    if not HUNTER_API_KEY:
+        print("Warning: HUNTER_API_KEY not set. Skipping Hunter.io enrichment.")
+    else:
+        try:
+            resp = requests.get(
+                f"https://api.hunter.io/v2/domain-search?domain={domain}&api_key={HUNTER_API_KEY}"
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                info["email_found"] = len(data.get("data", {}).get("emails", [])) > 0
+            else:
+                print(f"Hunter.io API error: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"Hunter.io enrichment error: {e}")
+
+    # --- Scrape website for more info ---
     try:
-        resp = requests.get(
-            f"https://api.hunter.io/v2/domain-search?domain={domain}&api_key={HUNTER_API_KEY}"
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            info["email_found"] = len(data.get("data", {}).get("emails", [])) > 0
+        scraped = get_basic_info(row["website"])
+        info.update(scraped)  # This will add/overwrite email_found, has_blog, has_social, etc.
     except Exception as e:
-        pass
+        print(f"Scraper error: {e}")
 
     return info
 
